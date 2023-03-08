@@ -13,11 +13,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	flag "github.com/opencoff/pflag"
 	"io"
 	"net"
 	"os"
 	"time"
+
+	flag "github.com/opencoff/pflag"
 )
 
 // Go command line option parsing truly sucks - especially in
@@ -30,6 +31,7 @@ var f_listen = flag.BoolP("listen", "l", false, "Work in listen mode")
 var f_bidir = flag.BoolP("bidirectional", "b", false, "Do I/O in both directions")
 var f_verbos = flag.BoolP("verbose", "v", false, "Show verbose progress messages")
 var f_hex = flag.BoolP("hexdump", "x", false, "Show hexdump of traffic")
+var f_ipv6 = flag.BoolP("ipv6", "6", false, "use ipv6, example: [::f1]:8080")
 
 // I/O hunk size
 var bufsiz int = 4 * 1048576
@@ -42,6 +44,7 @@ func main() {
 	}
 
 	flag.Parse()
+
 	args := flag.Args()
 	if len(args) < 1 {
 		die("Usage: %s [options] server:port\n", os.Args[0])
@@ -57,10 +60,14 @@ func main() {
 	var conn net.Conn
 	var err error
 
-	if *f_listen {
+	inet := "tcp"
+	if *f_ipv6 {
+		inet = "tcp6"
+	}
 
+	if *f_listen {
 		verbose("Listening on %s...\n", addr)
-		ln, err := net.Listen("tcp", addr)
+		ln, err := net.Listen(inet, addr)
 		if err != nil {
 			die("Can't listen on %s: %s\n", addr, err)
 		}
@@ -81,10 +88,12 @@ func main() {
 		}
 	} else {
 		verbose("Connecting to %s...\n", addr)
-		conn, err = net.Dial("tcp", addr)
+		conn, err = net.Dial(inet, addr)
 		if err != nil {
 			die("Can't connect to %s: %s\n", addr, err)
 		}
+
+		verbose("connect successed!\n")
 
 		o := io_obj{conn.RemoteAddr().String()}
 
@@ -222,7 +231,7 @@ func (o *io_obj) counting_io(rd io.Reader, wr io.Writer, dir string, ch chan ret
 	if *f_stats {
 		verbose("%d bytes %s %s in %3.2f s\n", n, dir, o.addr, float64(tot)/1.0e9)
 		sz, units := human(n)
-		speed := (sz * float64(time.Second))/ float64(tot)
+		speed := (sz * float64(time.Second)) / float64(tot)
 
 		msg += fmt.Sprintf("%4.1f %s (%4.1f %s/s) %s %s", sz, units, speed, units, dir, o.addr)
 	}
@@ -239,11 +248,11 @@ func (o *io_obj) counting_io(rd io.Reader, wr io.Writer, dir string, ch chan ret
 
 const (
 	_KB uint64 = 1024
-	_MB = 1024 * _KB
-	_GB = 1024 * _MB
-	_TB = 1024 * _GB
-	_PB = 1024 * _TB
-	_EB = 1024 * _PB
+	_MB        = 1024 * _KB
+	_GB        = 1024 * _MB
+	_TB        = 1024 * _GB
+	_PB        = 1024 * _TB
+	_EB        = 1024 * _PB
 )
 
 // human readable units
